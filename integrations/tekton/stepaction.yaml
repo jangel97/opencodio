@@ -25,7 +25,7 @@ spec:
       description: Model to use (e.g. google-vertex-anthropic/claude-sonnet-4-6@default, ollama/qwen3:14b-16k)
     - name: image
       type: string
-      default: "quay.io/jangel97/opencodio:v0.0.1"
+      default: "quay.io/jangel97/opencodio:latest"
     - name: gcp-volume
       type: string
       default: ""
@@ -42,10 +42,6 @@ spec:
       type: string
       default: ""
       description: Provider name for custom endpoints (e.g. ollama, vllm)
-    - name: extra-args
-      type: string
-      default: ""
-      description: Extra arguments passed to entrypoint.sh
   env:
     - name: OPENCODIO_PROMPT
       value: $(params.prompt)
@@ -68,6 +64,3 @@ spec:
       readOnly: true
     - name: $(params.output-volume)
       mountPath: /home/opencodio/output
-  script: |
-    #!/usr/bin/env bash
-    entrypoint.sh -p "$OPENCODIO_PROMPT" $(params.extra-args)

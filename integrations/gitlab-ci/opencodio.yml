@@ -1,8 +1,5 @@
 .opencodio:
-  image: quay.io/jangel97/opencodio:v0.0.1
+  image: quay.io/jangel97/opencodio:latest
   variables:
     OPENCODIO_STREAM: "1"
     NO_COLOR: "1"
-    OPENCODIO_EXTRA_ARGS: ""
-  script:
-    - entrypoint.sh -p "${OPENCODIO_PROMPT}" ${OPENCODIO_EXTRA_ARGS}
