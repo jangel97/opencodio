@@ -122,6 +122,41 @@ def discover_models(endpoint_url, api_key=None):
         return {}
 
 
+def configure_vertex_env():
+    """Map opencodio env vars to what OpenCode's built-in vertex provider expects."""
+    adc_path = os.environ.get(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        os.path.join(HOME, ".config/gcloud/application_default_credentials.json"),
+    )
+
+    project = (
+        os.environ.get("GOOGLE_CLOUD_PROJECT")
+        or os.environ.get("GOOGLE_VERTEX_PROJECT")
+    )
+    if not project:
+        try:
+            with open(adc_path) as f:
+                adc = json.load(f)
+                project = adc.get("quota_project_id") or adc.get("project_id")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    if not project:
+        log("ERROR: Could not determine GCP project. Set GOOGLE_CLOUD_PROJECT.")
+        sys.exit(1)
+
+    location = (
+        os.environ.get("GOOGLE_CLOUD_LOCATION")
+        or os.environ.get("CLOUD_ML_REGION")
+        or "us-east5"
+    )
+
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", project)
+    os.environ.setdefault("GOOGLE_CLOUD_LOCATION", location)
+
+    log(f"Vertex AI: project={project}, location={location}")
+
+
 def register_openai_compatible_provider():
     endpoint_url = os.environ.get("OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT")
     if not endpoint_url:
@@ -247,6 +282,8 @@ def main():
         write_config_content()
     elif provider == "custom":
         register_openai_compatible_provider()
+    elif provider == "vertex":
+        configure_vertex_env()
 
     configure_git()
 

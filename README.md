@@ -58,7 +58,8 @@ podman run --rm \
 podman run --rm -it \
   -v "${PWD}:/home/opencodio/workdir" \
   -v "${HOME}/.config/gcloud/application_default_credentials.json:/home/opencodio/.config/gcloud/application_default_credentials.json:ro" \
-  -e CLOUD_ML_REGION=europe-west1 \
+  -e GOOGLE_CLOUD_PROJECT=my-gcp-project \
+  -e GOOGLE_CLOUD_LOCATION=global \
   -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4-6@default \
   quay.io/jangel97/opencodio:latest
 ```
@@ -141,7 +142,8 @@ Streaming mode (`OPENCODIO_STREAM=1`) pipes OpenCode's JSON event stream through
 podman run --rm \
   -v "${PWD}:/home/opencodio/workdir" \
   -v "${HOME}/.config/gcloud/application_default_credentials.json:/home/opencodio/.config/gcloud/application_default_credentials.json:ro" \
-  -e CLOUD_ML_REGION=europe-west1 \
+  -e GOOGLE_CLOUD_PROJECT=my-gcp-project \
+  -e GOOGLE_CLOUD_LOCATION=global \
   -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4-6@default \
   -e OPENCODIO_STREAM=1 \
   -e OPENCODIO_PROMPT="Review the code changes and suggest improvements" \
@@ -154,7 +156,8 @@ podman run --rm \
 ai-review:
   image: quay.io/jangel97/opencodio:latest
   variables:
-    CLOUD_ML_REGION: "europe-west1"
+    GOOGLE_CLOUD_PROJECT: "my-gcp-project"
+    GOOGLE_CLOUD_LOCATION: "global"
     OPENCODIO_MODEL: "google-vertex-anthropic/claude-sonnet-4-6@default"
     OPENCODIO_STREAM: "1"
     OPENCODIO_PROMPT: "Review the latest commit and identify potential issues"
@@ -183,7 +186,7 @@ opencodio auto-detects your provider from available credentials (checked in this
 | Anthropic | `ANTHROPIC_API_KEY` | `sk-ant-...` |
 | OpenAI | `OPENAI_API_KEY` | `sk-...` |
 | Google AI | `GOOGLE_API_KEY` | `AI...` |
-| Vertex AI | ADC JSON file | Mount to `~/.config/gcloud/application_default_credentials.json` |
+| Vertex AI | ADC JSON + `GOOGLE_CLOUD_PROJECT` | Mount ADC, set project and location |
 | OpenAI-compatible | `OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT` | `http://host:11434/v1` |
 | Raw config | `OPENCODE_CONFIG_CONTENT` | JSON string |
 
@@ -203,6 +206,8 @@ Override auto-detection with `OPENCODIO_PROVIDER` or specify a model directly wi
 | `OPENCODIO_ENABLE_TOOLS` | Enable tool support for discovered models (`true`) | `false` |
 | `OPENCODIO_WRAP` | Word wrap at N columns | — |
 | `OPENCODE_CONFIG_CONTENT` | Raw `opencode.json` content (written to config on startup) | — |
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID for Vertex AI | from ADC |
+| `GOOGLE_CLOUD_LOCATION` | GCP region for Vertex AI | `global` |
 | `GIT_USER_NAME` | Git user name for commits | — |
 | `GIT_USER_EMAIL` | Git user email for commits | — |
 | `GIT_SSH_SIGNING_KEY` | Path to SSH key for commit signing | — |
