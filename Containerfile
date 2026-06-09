@@ -33,6 +33,13 @@ RUN set -eux; \
     curl -L "$GCLOUD_URL" -o gcloud.tar.gz; \
     tar -xzf gcloud.tar.gz -C /opt;
 
+# --- Optional: extra CLI tools (kubectl, helm, etc.) ---
+FROM registry.access.redhat.com/ubi10@sha256:9d3b5102e7ae4f82914a1791610b75acef134b93158be6005b6ae9218c163550 AS tools
+ARG TARGETARCH
+RUN mkdir -p /opt/tools/bin
+COPY install-scripts/ /tmp/install-scripts/
+RUN for s in /tmp/install-scripts/*.sh; do bash "$s"; done
+
 # --- Main image ---
 FROM registry.access.redhat.com/ubi10/python-312-minimal@sha256:1124c0e91dbae9b8893a218e34e7437b03865da333015078fd6bb84e2daf3665
 
@@ -43,8 +50,12 @@ ENV HOME=/home/opencodio
 ENV PATH="${HOME}/.local/bin:${HOME}/.npm-global/bin:${PATH}"
 
 # System dependencies
-RUN microdnf install -y skopeo podman unzip gzip git jq nodejs nodejs-npm; \
+COPY rpms.txt /tmp/rpms.txt
+RUN microdnf install -y $(cat /tmp/rpms.txt) && rm /tmp/rpms.txt; \
     useradd opencodio
+
+# Extra CLI tools
+COPY --from=tools /opt/tools/bin/ /usr/local/bin/
 
 # OpenCode — patched binary from jangel97/opencode fork.
 # Fixes JSON streaming race condition: https://github.com/anomalyco/opencode/issues/31435
