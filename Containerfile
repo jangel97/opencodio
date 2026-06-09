@@ -22,7 +22,7 @@ ARG ENABLE_GCLOUD="1"
 
 RUN set -eux; \
     if [ "$ENABLE_GCLOUD" != "1" ]; then \
-        mkdir -p /opt/google-cloud-sdk; \
+        mkdir -p /opt/google-cloud-sdk/bin; \
         exit 0; \
     fi; \
     GCLOUD_V="566.0.0"; \
@@ -31,57 +31,43 @@ RUN set -eux; \
         GCLOUD_URL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_V}-linux-arm.tar.gz"; \
     fi; \
     curl -L "$GCLOUD_URL" -o gcloud.tar.gz; \
-    tar -xzf gcloud.tar.gz -C /opt;
+    tar -xzf gcloud.tar.gz -C /opt; \
+    /opt/google-cloud-sdk/install.sh -q
 
-# --- Optional: extra CLI tools (kubectl, helm, etc.) ---
+# --- CLI tools (git, kubectl, jq, etc.) ---
 FROM registry.access.redhat.com/ubi10@sha256:9d3b5102e7ae4f82914a1791610b75acef134b93158be6005b6ae9218c163550 AS tools
 ARG TARGETARCH
-RUN mkdir -p /opt/tools/bin
+RUN mkdir -p /opt/tools/bin /opt/tools/lib64
 COPY install-scripts/ /tmp/install-scripts/
 RUN for s in /tmp/install-scripts/*.sh; do bash "$s"; done
 
-# --- Main image ---
-FROM registry.access.redhat.com/ubi10/python-312-minimal@sha256:1124c0e91dbae9b8893a218e34e7437b03865da333015078fd6bb84e2daf3665
+# --- Main image: Red Hat Hardened (distroless) Python ---
+FROM registry.access.redhat.com/hi/python@sha256:a9a71f12bc1767e8a0d0e157bf465cd0340e7a56c89aa89befd9b92cb09d393e
 
-ARG TARGETARCH
-ARG ENABLE_GCLOUD="1"
 USER root
 ENV HOME=/home/opencodio
-ENV PATH="${HOME}/.local/bin:${HOME}/.npm-global/bin:${PATH}"
 
-# System dependencies
-COPY rpms.txt /tmp/rpms.txt
-RUN microdnf install -y $(cat /tmp/rpms.txt) && rm /tmp/rpms.txt; \
-    useradd opencodio
-
-# Extra CLI tools
+# Extra CLI tools (binaries + shared libs from builder)
 COPY --from=tools /opt/tools/bin/ /usr/local/bin/
+COPY --from=tools /opt/tools/lib64/ /usr/lib64/
 
 # OpenCode — patched binary from jangel97/opencode fork.
 # Fixes JSON streaming race condition: https://github.com/anomalyco/opencode/issues/31435
-# Revert to npm install once the upstream fix is merged.
-COPY cli/opencode-patched /usr/local/bin/opencode
-RUN chmod +x /usr/local/bin/opencode
+# Revert to upstream once the fix is merged.
+COPY --chmod=755 cli/opencode-patched /usr/local/bin/opencode
 
-# GCloud (optional)
+# GCloud (optional — builder installs when ENABLE_GCLOUD=1, otherwise empty dir)
 COPY --from=gcloud-preparer /opt/google-cloud-sdk /opt/google-cloud-sdk
-RUN set -eux; \
-    if [ "$ENABLE_GCLOUD" = "1" ] && [ -f /opt/google-cloud-sdk/install.sh ]; then \
-        /opt/google-cloud-sdk/install.sh -q; \
-        ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud; \
-    fi
+RUN ["/usr/bin/python3", "-c", "\nimport os\nif os.path.isfile('/opt/google-cloud-sdk/bin/gcloud'):\n    os.symlink('/opt/google-cloud-sdk/bin/gcloud', '/usr/local/bin/gcloud')\n"]
 
-# Configuration
-COPY conf/ ${HOME}/
-COPY conf/.config/ ${HOME}/.config/
-COPY scripts/stream-opencode.py entrypoint.sh /usr/local/bin/
+# Configuration (owned by runtime user)
+COPY --chown=65532:0 conf/ ${HOME}/
+COPY --chown=65532:0 conf/.config/ ${HOME}/.config/
 
-# Permissions
-RUN chown -R opencodio:0 ${HOME}; \
-    chmod -R ug+rwx ${HOME}; \
-    chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/stream-opencode.py
+# Scripts
+COPY --chmod=755 scripts/entrypoint.py scripts/stream-opencode.py /usr/local/bin/
 
-USER opencodio
+USER 65532
 WORKDIR /home/opencodio
 
-ENTRYPOINT ["entrypoint.sh"]
+ENTRYPOINT ["python3", "/usr/local/bin/entrypoint.py"]
