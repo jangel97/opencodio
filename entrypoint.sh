@@ -33,7 +33,7 @@ detect_provider() {
   if [ -n "${OPENAI_API_KEY:-}" ]; then echo "openai"; return; fi
   if [ -n "${GOOGLE_API_KEY:-}" ]; then echo "google"; return; fi
   if check_adc; then echo "vertex"; return; fi
-  if [ -n "${OLLAMA_HOST:-}" ]; then echo "ollama"; return; fi
+  if [ -n "${OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT:-}" ]; then echo "${OPENCODIO_PROVIDER:-custom}"; return; fi
   if [ -n "${OPENCODE_CONFIG_CONTENT:-}" ]; then echo "config"; return; fi
 
   echo "ERROR: No provider credentials found" >&2
@@ -41,7 +41,7 @@ detect_provider() {
   echo "  ANTHROPIC_API_KEY    — Anthropic" >&2
   echo "  OPENAI_API_KEY       — OpenAI" >&2
   echo "  GOOGLE_API_KEY       — Google AI" >&2
-  echo "  OLLAMA_HOST          — Ollama (local models)" >&2
+  echo "  OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT — Any OpenAI-compatible endpoint (Ollama, vLLM, TGI, etc.)" >&2
   echo "  GOOGLE_APPLICATION_CREDENTIALS — Vertex AI (ADC)" >&2
   echo "Or set OPENCODIO_PROVIDER to force a specific provider." >&2
   exit 1
@@ -96,26 +96,37 @@ for c in ~/.config/opencode/context.d/*.md; do
 done
 shopt -u nullglob
 
-# Register Ollama provider when OLLAMA_HOST is set
-if [ -n "${OLLAMA_HOST:-}" ]; then
-  OLLAMA_MODELS=$(curl -s --connect-timeout 5 "${OLLAMA_HOST}/api/tags" 2>/dev/null \
-    | python3 -c "import sys,json; models=json.load(sys.stdin).get('models',[]); print(','.join(['\"'+m['name']+'\":{\"tools\":true}' for m in models]))" 2>/dev/null) || OLLAMA_MODELS=""
+# Register OpenAI-compatible provider (Ollama, vLLM, TGI, LocalAI, etc.)
+if [ -n "${OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT:-}" ]; then
+  ENDPOINT_URL="${OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT}"
+  PROVIDER_NAME="${OPENCODIO_PROVIDER:-custom}"
 
-  if [ -z "$OLLAMA_MODELS" ]; then
-    echo "WARNING: Could not discover models from ${OLLAMA_HOST}. Is the Ollama server running?" >&2
+  # Discover models via /v1/models (OpenAI standard)
+  API_KEY_HEADER=""
+  [ -n "${OPENCODIO_API_KEY:-}" ] && API_KEY_HEADER="-H Authorization: Bearer ${OPENCODIO_API_KEY}"
+
+  DISCOVERED_MODELS=$(curl -s --connect-timeout 5 $API_KEY_HEADER "${ENDPOINT_URL}/models" 2>/dev/null \
+    | python3 -c "import sys,json; models=json.load(sys.stdin).get('data',[]); print(','.join(['\"'+m['id']+'\":{\"tools\":true}' for m in models]))" 2>/dev/null) || DISCOVERED_MODELS=""
+
+  if [ -z "$DISCOVERED_MODELS" ]; then
+    echo "WARNING: Could not discover models from ${ENDPOINT_URL}. Is the server running?" >&2
   fi
+
+  # Build provider options
+  PROVIDER_OPTS="\"baseURL\": \"${ENDPOINT_URL}\""
+  [ -n "${OPENCODIO_API_KEY:-}" ] && PROVIDER_OPTS="${PROVIDER_OPTS}, \"apiKey\": \"${OPENCODIO_API_KEY}\""
 
   OPENCODE_CFG="${HOME}/.config/opencode/opencode.json"
   cat > "$OPENCODE_CFG" <<EOCFG
 {
   "\$schema": "https://opencode.ai/config.json",
   "provider": {
-    "ollama": {
+    "${PROVIDER_NAME}": {
       "npm": "@ai-sdk/openai-compatible",
       "options": {
-        "baseURL": "${OLLAMA_HOST}/v1"
+        ${PROVIDER_OPTS}
       },
-      "models": {${OLLAMA_MODELS}}
+      "models": {${DISCOVERED_MODELS}}
     }
   }
 }

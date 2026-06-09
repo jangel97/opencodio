@@ -21,17 +21,18 @@ podman run --rm -it \
   -e GOOGLE_APPLICATION_CREDENTIALS="/home/opencodio/.config/gcloud/application_default_credentials.json" \
   -e GOOGLE_VERTEX_PROJECT="my-gcp-project" \
   -e GOOGLE_VERTEX_LOCATION="global" \
-  -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4@20250514 \
+  -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4-6@default \
   quay.io/jangel97/opencodio:v0.0.1
 ```
 
-### Ollama (local/remote models)
+### OpenAI-compatible endpoint (Ollama, vLLM, TGI, etc.)
 
 ```bash
 podman run --rm -it \
   --name opencodio \
   -v "${PWD}:/home/opencodio/workdir" \
-  -e OLLAMA_HOST=http://192.168.1.138:11434 \
+  -e OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT=http://192.168.1.138:11434/v1 \
+  -e OPENCODIO_PROVIDER=ollama \
   -e OPENCODIO_MODEL=ollama/qwen3:14b-16k \
   quay.io/jangel97/opencodio:v0.0.1
 ```
@@ -59,7 +60,7 @@ podman run --rm -it \
   -e GOOGLE_APPLICATION_CREDENTIALS="/home/opencodio/.config/gcloud/application_default_credentials.json" \
   -e GOOGLE_VERTEX_PROJECT="my-gcp-project" \
   -e GOOGLE_VERTEX_LOCATION="global" \
-  -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4@20250514 \
+  -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4-6@default \
   quay.io/jangel97/opencodio:v0.0.1 \
   -p "Explain the main function in this project"
 ```
@@ -105,12 +106,13 @@ Not all models support tool calling. Models must have native function calling su
 podman run --rm -it \
   --name opencodio \
   -v "${PWD}:/home/opencodio/workdir" \
-  -e OLLAMA_HOST=http://192.168.1.138:11434 \
+  -e OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT=http://192.168.1.138:11434/v1 \
+  -e OPENCODIO_PROVIDER=ollama \
   -e OPENCODIO_MODEL=ollama/qwen3:14b-16k \
   quay.io/jangel97/opencodio:v0.0.1
 ```
 
-The entrypoint auto-discovers all models from the Ollama API and registers them with tool support enabled.
+The entrypoint auto-discovers all models from the `/v1/models` endpoint and registers them with tool support enabled.
 
 ## CI/CD Streaming Mode
 
@@ -121,9 +123,9 @@ podman run --rm \
   -v "${PWD}:/home/opencodio/workdir" \
   -v "${HOME}/.config/gcloud:/home/opencodio/.config/gcloud" \
   -e GOOGLE_APPLICATION_CREDENTIALS="/home/opencodio/.config/gcloud/application_default_credentials.json" \
-  -e GOOGLE_VERTEX_PROJECT="my-gcp-project" \
+  -e GOOGLE_VERTEX_PROJECT="myproject" \
   -e GOOGLE_VERTEX_LOCATION="global" \
-  -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4@20250514 \
+  -e OPENCODIO_MODEL=google-vertex-anthropic/claude-sonnet-4-6@default \
   -e OPENCODIO_STREAM=1 \
   -e OPENCODIO_PROMPT="Review the code changes and suggest improvements" \
   quay.io/jangel97/opencodio:v0.0.1
@@ -137,7 +139,7 @@ ai-review:
   variables:
     GOOGLE_VERTEX_PROJECT: "my-gcp-project"
     GOOGLE_VERTEX_LOCATION: "global"
-    OPENCODIO_MODEL: "google-vertex-anthropic/claude-sonnet-4@20250514"
+    OPENCODIO_MODEL: "google-vertex-anthropic/claude-sonnet-4-6@default"
     OPENCODIO_STREAM: "1"
     OPENCODIO_PROMPT: "Review the latest commit and identify potential issues"
   script:
@@ -170,7 +172,7 @@ opencodio auto-detects your provider from available credentials:
 | OpenAI | `OPENAI_API_KEY` | `sk-...` |
 | Google AI | `GOOGLE_API_KEY` | `AI...` |
 | Vertex AI | `GOOGLE_APPLICATION_CREDENTIALS` | Path to ADC JSON |
-| Ollama | `OLLAMA_HOST` | `http://localhost:11434` |
+| Ollama / vLLM / TGI | `OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT` | `http://host:11434/v1` |
 
 Override auto-detection with `OPENCODIO_PROVIDER` or specify a model directly with `OPENCODIO_MODEL`.
 
@@ -180,7 +182,9 @@ Override auto-detection with `OPENCODIO_PROVIDER` or specify a model directly wi
 |----------|-------------|---------|
 | `OPENCODIO_PROMPT` | Task prompt (required in streaming mode) | — |
 | `OPENCODIO_STREAM` | Enable streaming mode (`1`) | `""` (disabled) |
-| `OPENCODIO_MODEL` | Model override (e.g., `ollama/qwen2.5-coder:32b`) | auto |
+| `OPENCODIO_MODEL` | Model override (e.g., `ollama/qwen3:14b-16k`) | auto |
+| `OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT` | OpenAI-compatible endpoint URL | — |
+| `OPENCODIO_PROVIDER` | Provider name for custom endpoints (e.g., `ollama`, `vllm`) | `custom` |
+| `OPENCODIO_API_KEY` | API key for custom endpoints | — |
 | `OPENCODIO_WRAP` | Word wrap at N columns | — |
-| `OPENCODIO_PROVIDER` | Force a specific provider | auto-detect |
 | `DEBUG` | Enable bash debug output | `false` |

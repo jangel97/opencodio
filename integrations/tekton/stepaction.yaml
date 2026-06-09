@@ -1,0 +1,73 @@
+apiVersion: tekton.dev/v1beta1
+kind: StepAction
+metadata:
+  name: opencodio-run
+  annotations:
+    tekton.dev/description: |
+      Runs opencodio (OpenCode agent) with a given prompt in streaming mode.
+
+      Prerequisites:
+        1. GCP credentials secret (for Vertex AI):
+           - Key: application_default_credentials.json
+           - kubectl create secret generic opencodio-adc \
+               --from-file=application_default_credentials.json=<path-to-key.json>
+        2. The consuming Task must define two volumes and pass their names via
+           gcp-volume and output-volume params.
+
+spec:
+  params:
+    - name: prompt
+      type: string
+      description: Prompt for opencodio
+    - name: model
+      type: string
+      default: "google-vertex-anthropic/claude-sonnet-4-6@default"
+      description: Model to use (e.g. google-vertex-anthropic/claude-sonnet-4-6@default, ollama/qwen3:14b-16k)
+    - name: image
+      type: string
+      default: "quay.io/jangel97/opencodio:v0.0.1"
+    - name: gcp-volume
+      type: string
+      default: ""
+      description: Name of the volume with GCP credentials (required for Vertex AI)
+    - name: output-volume
+      type: string
+      default: ""
+      description: Name of the volume for opencodio output
+    - name: endpoint
+      type: string
+      default: ""
+      description: OpenAI-compatible endpoint URL (for Ollama, vLLM, TGI, etc.)
+    - name: provider
+      type: string
+      default: ""
+      description: Provider name for custom endpoints (e.g. ollama, vllm)
+    - name: extra-args
+      type: string
+      default: ""
+      description: Extra arguments passed to entrypoint.sh
+  env:
+    - name: OPENCODIO_PROMPT
+      value: $(params.prompt)
+    - name: OPENCODIO_MODEL
+      value: $(params.model)
+    - name: OPENCODIO_STREAM
+      value: "1"
+    - name: OPENCODIO_OPENAI_COMPATIBLE_ENDPOINT
+      value: $(params.endpoint)
+    - name: OPENCODIO_PROVIDER
+      value: $(params.provider)
+    - name: NO_COLOR
+      value: "1"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: /var/run/secrets/gcp/application_default_credentials.json
+  image: $(params.image)
+  volumeMounts:
+    - name: $(params.gcp-volume)
+      mountPath: /var/run/secrets/gcp
+      readOnly: true
+    - name: $(params.output-volume)
+      mountPath: /home/opencodio/output
+  script: |
+    #!/usr/bin/env bash
+    entrypoint.sh -p "$OPENCODIO_PROMPT" $(params.extra-args)
